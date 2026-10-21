@@ -1,4 +1,4 @@
-# Amr Chess Engine
+# AnkaJ Chess
 
 ![Gameplay](docs/screenshot.png)
 
@@ -25,15 +25,15 @@ now refactored with a modern project structure, proper types, and a responsive S
 Clone and run with Maven:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Amr-chess-engine.git
-cd Amr-chess-engine
+git clone https://github.com/YOUR_USERNAME/ankaj-chess.git
+cd ankaj-chess
 mvn clean compile exec:java
 ```
 
 Or run the executable JAR (see [Releases](../../releases)):
 
 ```bash
-java -jar amr-chess-engine.jar
+java -jar ankaj-chess.jar
 ```
 
 ## How to Play
