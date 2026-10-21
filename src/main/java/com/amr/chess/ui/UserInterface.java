@@ -139,6 +139,10 @@ public class UserInterface extends JPanel implements MouseListener {
 
         int col = (e.getX() - boardOffsetX) / squareSize;
         int row = (e.getY() - boardOffsetY) / squareSize;
+
+        // Save press coordinates BEFORE resetting
+        int fromRow = pressRow;
+        int fromCol = pressCol;
         pressRow = -1;
         pressCol = -1;
 
@@ -149,7 +153,7 @@ public class UserInterface extends JPanel implements MouseListener {
 
         // Find matching legal move
         List<Move> legalMoves = MoveGenerator.generatePossibleMoves(board);
-        Move userMove = findMove(legalMoves, pressRow, pressCol, row, col);
+        Move userMove = findMove(legalMoves, fromRow, fromCol, row, col);
 
         if (userMove == null) {
             repaint();
@@ -161,7 +165,9 @@ public class UserInterface extends JPanel implements MouseListener {
         board.flipBoard();
         repaint();
 
-        // Run engine search on a BACKGROUND thread so the GUI stays responsive
+        // Snapshot the board state for the engine to work on
+        final Board engineBoard = new Board(board);
+
         engineThinking = true;
         repaint();
 
@@ -172,11 +178,11 @@ public class UserInterface extends JPanel implements MouseListener {
             protected Move doInBackground() {
                 long start = System.currentTimeMillis();
 
-                List<Move> engineMoves = MoveGenerator.generatePossibleMoves(board);
+                List<Move> engineMoves = MoveGenerator.generatePossibleMoves(engineBoard);
                 if (engineMoves.isEmpty())
                     return null;
 
-                Move best = AlphaBeta.findBestMove(board);
+                Move best = AlphaBeta.findBestMove(engineBoard);
                 elapsed = System.currentTimeMillis() - start;
                 return best;
             }
@@ -199,6 +205,7 @@ public class UserInterface extends JPanel implements MouseListener {
                         System.out.println("That took " + elapsed + " ms | "
                                 + AlphaBeta.c / 1000 + "K moves searched");
 
+                        // Apply the engine's chosen move to the GUI's board
                         board.makeMove(bestMove);
                         board.flipBoard();
                     }
