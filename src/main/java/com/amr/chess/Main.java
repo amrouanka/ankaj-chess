@@ -10,39 +10,31 @@ import javax.swing.*;
 public class Main {
 
     public static void main(String[] args) {
-        startGame();
+        SwingUtilities.invokeLater(Main::startGame);
     }
 
     private static void startGame() {
         Board board = new Board();
-        board.display();
+
+        Object[] options = { "Black", "White" };
+        int choice = JOptionPane.showOptionDialog(null,
+                "Who should play as white?", "Amr Chess Engine",
+                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, options, options[1]);
+
+        boolean humanIsWhite = (choice != 0); // 0 = Black, 1 = White
 
         JFrame frame = new JFrame("Amr Chess Engine");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        UserInterface ui = new UserInterface(board);
+        UserInterface ui = new UserInterface(board, humanIsWhite);
         frame.add(ui);
-        frame.setSize(900, 920);
-        frame.setVisible(true);
+        frame.setSize(800, 820);
         frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
 
-        Object[] options = { "Black", "White" };
-        int choice = JOptionPane.showOptionDialog(null,
-                "Who should play as white?", "ABC Options",
-                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
-                null, options, options[1]);
-
-        if (choice == 0) {
-            playComputerMove(board, frame);
-        }
-    }
-
-    private static void playComputerMove(Board board, JFrame frame) {
-        Move bestMove = AlphaBeta.findBestMove(board);
-        if (bestMove != null) {
-            board.makeMove(bestMove);
-            board.flipBoard();
-            frame.repaint();
+        if (!humanIsWhite) {
+            ui.startEngineMove(frame);
         }
     }
 }
