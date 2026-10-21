@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
-         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.amr</groupId>
-    <artifactId>chess-engine</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <artifactId>ankaj-chess</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>AnkaJ Chess</name>
+    <description>A Java chess engine with Swing GUI — the classic counterpart to AnkaX</description>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -17,6 +20,7 @@
 
     <build>
         <sourceDirectory>src/main/java</sourceDirectory>
+        <finalName>ankaj-chess</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -33,6 +37,18 @@
                 </configuration>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.amr.chess.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.4.1</version>
@@ -42,7 +58,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <dependencies>
-    </dependencies>
 </project>

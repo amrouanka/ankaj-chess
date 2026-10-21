@@ -18,13 +18,13 @@ public class Main {
 
         Object[] options = { "Black", "White" };
         int choice = JOptionPane.showOptionDialog(null,
-                "Who should play as white?", "Amr Chess Engine",
+                "Who should play as white?", "AnkaJ Chess",
                 JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
                 null, options, options[1]);
 
         boolean humanIsWhite = (choice != 0); // 0 = Black, 1 = White
 
-        JFrame frame = new JFrame("Amr Chess Engine");
+        JFrame frame = new JFrame("AnkaJ Chess");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         UserInterface ui = new UserInterface(board, humanIsWhite);
