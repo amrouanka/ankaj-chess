@@ -4,7 +4,7 @@ import com.amr.chess.model.Board;
 
 public class Evaluation {
 
-    private static final int CHECKMATE = 100000;
+    public static final int CHECKMATE = 100000;
 
     private static final int[][] DFCT = {
             { 6, 5, 4, 3, 3, 4, 5, 6 },
@@ -18,82 +18,47 @@ public class Evaluation {
     };
 
     /**
-     * Returns a score from the perspective of the side to move.
-     * Positive = good for the side to move.
+     * Fast static evaluation: single pass over 64 squares.
+     * Positive = good for the side to move (uppercase pieces).
+     *
+     * No cloning, no flipping, no move generation.
+     * Checkmate/stalemate is handled by the search, not here.
      */
-    public static int rating(Board board, int moveCount) {
-        if (moveCount == 0) {
-            if (GameLogic.kingSafe(board))
-                return 0; // stalemate
-            else
-                return -CHECKMATE; // we are checkmated
-        }
-
+    public static int rating(Board board) {
         int counter = 0;
-        counter += moveCount / 5;
-        counter += rateMaterial(board);
-
-        board.flipBoard();
-        int opponentMoves = MoveGenerator.generatePossibleMoves(board).size();
-        if (opponentMoves == 0) {
-            board.flipBoard();
-            if (GameLogic.kingSafe(board))
-                return 0; // opponent stalemated
-            else
-                return CHECKMATE; // we checkmated opponent
-        }
-
-        counter -= opponentMoves / 5;
-        counter -= rateMaterial(board);
-        board.flipBoard();
-
-        return counter; // No negation — negamax handles the sign
-    }
-
-    private static int rateMaterial(Board board) {
-        int[] knightAdj = { -20, -16, -12, -8, -4, 0, 4, 8 };
-        int[] rookAdj = { 15, 12, 9, 6, 3, 0, -3, -6 };
-
-        int counter = 0;
-        int bishopCount = 0;
-        int knightCount = 0;
-        int rookCount = 0;
-        int pawnCount = -1;
+        int ourBishops = 0;
+        int theirBishops = 0;
 
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
                 switch (board.get(i, j)) {
-                    case 'P' -> {
-                        counter += 100 - DFCT[i][j];
-                        pawnCount++;
-                    }
-                    case 'N' -> {
-                        counter += 325 - DFCT[i][j];
-                        knightCount++;
-                    }
+                    // Our pieces (uppercase) — add to score
+                    case 'P' -> counter += 100 - DFCT[i][j];
+                    case 'N' -> counter += 325 - DFCT[i][j];
                     case 'B' -> {
                         counter += 325 - DFCT[i][j];
-                        bishopCount++;
+                        ourBishops++;
                     }
-                    case 'R' -> {
-                        counter += 500 + DFCT[i][j];
-                        rookCount++;
-                    }
+                    case 'R' -> counter += 500 + DFCT[i][j];
                     case 'Q' -> counter += 975;
+                    // Their pieces (lowercase) — subtract from score
+                    case 'p' -> counter -= 100 - DFCT[i][j];
+                    case 'n' -> counter -= 325 - DFCT[i][j];
+                    case 'b' -> {
+                        counter -= 325 - DFCT[i][j];
+                        theirBishops++;
+                    }
+                    case 'r' -> counter -= 500 + DFCT[i][j];
+                    case 'q' -> counter -= 975;
                 }
             }
         }
 
-        if (knightCount > 1)
-            counter -= 20;
-        if (rookCount > 1)
-            counter -= 20;
-        if (bishopCount > 1)
+        // Bishop pair bonus
+        if (ourBishops >= 2)
             counter += 50;
-
-        if (pawnCount != -1) {
-            counter += (knightAdj[pawnCount] * knightCount) + (rookAdj[pawnCount] * rookCount);
-        }
+        if (theirBishops >= 2)
+            counter -= 50;
 
         return counter;
     }

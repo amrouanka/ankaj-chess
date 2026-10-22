@@ -46,11 +46,12 @@ public class MoveGenerator {
         return moves;
     }
 
-    // ─── Piece move generators (private) ───────────────────────────────
+    // ─── Pawn ──────────────────────────────────────────────────────────
 
     private static List<Move> pawnMoves(Board board, int row, int col) {
         List<Move> moves = new ArrayList<>();
 
+        // Diagonal captures
         for (int dir = -1; dir <= 1; dir += 2) {
             if (!GameLogic.isValidPosition(row - 1, col + dir))
                 continue;
@@ -63,18 +64,30 @@ public class MoveGenerator {
             }
         }
 
+        // En passant capture
+        int epCol = board.getEnPassantCol();
+        if (epCol >= 0 && row == 3 && Math.abs(col - epCol) == 1) {
+            addIfLegal(moves, GameLogic.checkEnPassantMove(board, row, col, 2, epCol));
+        }
+
+        // Forward moves
         if (GameLogic.isValidPosition(row - 1, col) && board.get(row - 1, col) == ' ') {
             if (row > 1) {
                 addIfLegal(moves, GameLogic.checkMove(board, row, col, row - 1, col));
             } else {
                 addIfLegal(moves, GameLogic.checkPromotionMove(board, row, col, 0, col));
             }
+
+            // Double push from starting row
             if (row == 6 && board.get(row - 2, col) == ' ') {
                 addIfLegal(moves, GameLogic.checkMove(board, row, col, row - 2, col));
             }
         }
+
         return moves;
     }
+
+    // ─── Knight ────────────────────────────────────────────────────────
 
     private static List<Move> knightMoves(Board board, int row, int col) {
         List<Move> moves = new ArrayList<>();
@@ -88,6 +101,8 @@ public class MoveGenerator {
         }
         return moves;
     }
+
+    // ─── Sliding pieces ───────────────────────────────────────────────
 
     private static List<Move> bishopMoves(Board board, int row, int col) {
         return slidingMoves(board, row, col, BISHOP_DIRS);
@@ -122,10 +137,13 @@ public class MoveGenerator {
         return moves;
     }
 
+    // ─── King (including castling) ─────────────────────────────────────
+
     private static List<Move> kingMoves(Board board, int row, int col) {
         List<Move> moves = new ArrayList<>();
         int originalKingPos = board.getWhiteKingPos();
 
+        // Normal king moves (one square in any direction)
         for (int rowDir = -1; rowDir <= 1; rowDir++) {
             for (int colDir = -1; colDir <= 1; colDir++) {
                 if (rowDir == 0 && colDir == 0)
@@ -142,7 +160,55 @@ public class MoveGenerator {
                 board.setWhiteKingPos(originalKingPos);
             }
         }
+
+        // Castling (only from the home row)
+        if (row == 7) {
+            addCastlingMoves(board, row, col, moves);
+        }
+
         return moves;
+    }
+
+    /**
+     * Generates castling moves if all conditions are met.
+     * Detects castling by checking if the king can move 2 squares toward a rook.
+     */
+    private static void addCastlingMoves(Board board, int row, int kingCol, List<Move> moves) {
+        int rights = board.getCastlingRights();
+
+        // King must not be in check to castle
+        if (GameLogic.isSquareAttacked(board, row, kingCol))
+            return;
+
+        // ── Kingside ──
+        if ((rights & Board.WHITE_KINGSIDE) != 0) {
+            int col1 = kingCol + 1; // square king passes through
+            int col2 = kingCol + 2; // square king lands on
+            if (col2 <= 7
+                    && board.get(row, col1) == ' '
+                    && board.get(row, col2) == ' '
+                    && board.get(row, 7) == 'R'
+                    && !GameLogic.isSquareAttacked(board, row, col1)) {
+                addIfLegal(moves, GameLogic.checkCastlingMove(
+                        board, row, kingCol, col2, 7, col1));
+            }
+        }
+
+        // ── Queenside ──
+        if ((rights & Board.WHITE_QUEENSIDE) != 0) {
+            int col1 = kingCol - 1; // square king passes through
+            int col2 = kingCol - 2; // square king lands on
+            int col3 = kingCol - 3; // square rook passes through (must be empty)
+            if (col2 >= 0 && col3 >= 0
+                    && board.get(row, col1) == ' '
+                    && board.get(row, col2) == ' '
+                    && board.get(row, col3) == ' '
+                    && board.get(row, 0) == 'R'
+                    && !GameLogic.isSquareAttacked(board, row, col1)) {
+                addIfLegal(moves, GameLogic.checkCastlingMove(
+                        board, row, kingCol, col2, 0, col1));
+            }
+        }
     }
 
     private static void addIfLegal(List<Move> moves, Move move) {

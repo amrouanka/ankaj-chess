@@ -20,6 +20,7 @@ public class UserInterface extends JPanel implements MouseListener {
     private final boolean humanIsWhite;
     private boolean isHumanTurn;
     private boolean engineThinking = false;
+    private boolean gameOver = false;
 
     private final Map<Character, Image> pieceImages = new HashMap<>();
     private int squareSize;
@@ -33,15 +34,12 @@ public class UserInterface extends JPanel implements MouseListener {
     public UserInterface(Board board, boolean humanIsWhite) {
         this.board = board;
         this.humanIsWhite = humanIsWhite;
-        this.isHumanTurn = humanIsWhite; // white moves first
+        this.isHumanTurn = humanIsWhite;
         loadPieceImages();
         setBackground(new Color(50, 50, 50));
         addMouseListener(this);
     }
 
-    /**
-     * Called from Main when the human plays black and the engine moves first.
-     */
     public void startEngineMove(JFrame frame) {
         final Board engineBoard = new Board(board);
         engineThinking = true;
@@ -64,12 +62,11 @@ public class UserInterface extends JPanel implements MouseListener {
                 try {
                     Move bestMove = get();
                     if (bestMove != null) {
-                        long nps = elapsed > 0 ? (AlphaBeta.c * 1000L) / elapsed : 0;
-                        System.out.printf("Depth %d | %,d nodes | %,d ms | %,d nps%n",
-                                AlphaBeta.globalDepth, AlphaBeta.c, elapsed, nps);
+                        printSearchInfo(elapsed);
                         board.makeMove(bestMove);
                         board.flipBoard();
                         isHumanTurn = true;
+                        checkGameOver();
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
@@ -93,30 +90,28 @@ public class UserInterface extends JPanel implements MouseListener {
         return new ImageIcon(Objects.requireNonNull(getClass().getResource(name))).getImage();
     }
 
-    // ─── Display coordinate mapping ────────────────────────────────────
-    // The board data flips after every half-move (flip-board convention).
-    // The GUI always renders from the human's perspective by reversing
-    // the row/col mapping and swapping piece colors when it's the engine's turn.
+    // ─── Display coordinate mapping ────────────────────────────────
+    // Vertical flip only: rows reverse, columns stay the same.
 
     private int dataRow(int screenRow) {
         return isHumanTurn ? screenRow : 7 - screenRow;
     }
 
     private int dataCol(int screenCol) {
-        return isHumanTurn ? screenCol : 7 - screenCol;
+        // When human plays black, mirror columns so the a-file is on the right
+        return humanIsWhite ? screenCol : 7 - screenCol;
     }
 
     private char displayPiece(char c) {
         if (c == ' ')
             return c;
-        // Swap piece colors when the data's "white" isn't the human's actual color
         boolean shouldSwap = (humanIsWhite != isHumanTurn);
         if (!shouldSwap)
             return c;
         return Character.isUpperCase(c) ? Character.toLowerCase(c) : Character.toUpperCase(c);
     }
 
-    // ─── Rendering ─────────────────────────────────────────────────────
+    // ─── Rendering ─────────────────────────────────────────────────
 
     @Override
     public Dimension getPreferredSize() {
@@ -139,13 +134,11 @@ public class UserInterface extends JPanel implements MouseListener {
                 int dr = dataRow(screenRow);
                 int dc = dataCol(screenCol);
 
-                // Draw square
                 g2.setColor((screenRow + screenCol) % 2 == 0 ? LIGHT_SQUARE : DARK_SQUARE);
                 g2.fillRect(boardOffsetX + screenCol * squareSize,
                         boardOffsetY + screenRow * squareSize,
                         squareSize, squareSize);
 
-                // Highlight pressed square
                 if (dr == pressRow && dc == pressCol) {
                     g2.setColor(HIGHLIGHT);
                     g2.fillRect(boardOffsetX + screenCol * squareSize,
@@ -153,7 +146,6 @@ public class UserInterface extends JPanel implements MouseListener {
                             squareSize, squareSize);
                 }
 
-                // Draw piece
                 char c = displayPiece(board.get(dr, dc));
                 if (c == ' ')
                     continue;
@@ -182,11 +174,11 @@ public class UserInterface extends JPanel implements MouseListener {
         }
     }
 
-    // ─── Mouse Handling ────────────────────────────────────────────────
+    // ─── Mouse Handling ────────────────────────────────────────────
 
     @Override
     public void mousePressed(MouseEvent e) {
-        if (engineThinking || !isHumanTurn)
+        if (engineThinking || !isHumanTurn || gameOver)
             return;
 
         int screenCol = (e.getX() - boardOffsetX) / squareSize;
@@ -201,7 +193,7 @@ public class UserInterface extends JPanel implements MouseListener {
 
     @Override
     public void mouseReleased(MouseEvent e) {
-        if (engineThinking || !isHumanTurn || pressRow < 0)
+        if (engineThinking || !isHumanTurn || pressRow < 0 || gameOver)
             return;
 
         int screenCol = (e.getX() - boardOffsetX) / squareSize;
@@ -228,13 +220,11 @@ public class UserInterface extends JPanel implements MouseListener {
             return;
         }
 
-        // Human's move
         board.makeMove(userMove);
         board.flipBoard();
         isHumanTurn = false;
         repaint();
 
-        // Engine's turn on a background thread
         final Board engineBoard = new Board(board);
         engineThinking = true;
         repaint();
@@ -260,20 +250,15 @@ public class UserInterface extends JPanel implements MouseListener {
                     Move bestMove = get();
 
                     if (bestMove == null) {
-                        if (GameLogic.kingSafe(board)) {
-                            JOptionPane.showMessageDialog(UserInterface.this,
-                                    "Stalemate! It's a draw.");
-                        } else {
-                            JOptionPane.showMessageDialog(UserInterface.this,
-                                    "Checkmate! You WON! 🎉");
-                        }
+                        gameOver = true;
+                        repaint();
+                        showGameOverDialog(true);
                     } else {
-                        long nps = elapsed > 0 ? (AlphaBeta.c * 1000L) / elapsed : 0;
-                        System.out.printf("Depth %d | %,d nodes | %,d ms | %,d nps%n",
-                                AlphaBeta.globalDepth, AlphaBeta.c, elapsed, nps);
+                        printSearchInfo(elapsed);
                         board.makeMove(bestMove);
                         board.flipBoard();
                         isHumanTurn = true;
+                        checkGameOver();
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();
@@ -284,7 +269,48 @@ public class UserInterface extends JPanel implements MouseListener {
         worker.execute();
     }
 
-    private Move findMove(List<Move> moves, int fromRow, int fromCol, int toRow, int toCol) {
+    // ─── Game over detection ───────────────────────────────────────
+
+    private void checkGameOver() {
+        List<Move> replies = MoveGenerator.generatePossibleMoves(board);
+        if (replies.isEmpty()) {
+            gameOver = true;
+            repaint();
+            // isHumanTurn is true here, so the human has no moves
+            showGameOverDialog(false);
+        }
+    }
+
+    /**
+     * @param engineHasNoMoves true if the ENGINE ran out of moves (human wins),
+     *                         false if the HUMAN ran out of moves (engine wins).
+     */
+    private void showGameOverDialog(boolean engineHasNoMoves) {
+        SwingUtilities.invokeLater(() -> {
+            if (engineHasNoMoves) {
+                if (GameLogic.kingSafe(board)) {
+                    JOptionPane.showMessageDialog(this, "Stalemate! It's a draw.");
+                } else {
+                    JOptionPane.showMessageDialog(this, "Checkmate! You WON! 🎉");
+                }
+            } else {
+                if (GameLogic.kingSafe(board)) {
+                    JOptionPane.showMessageDialog(this, "Stalemate! It's a draw.");
+                } else {
+                    JOptionPane.showMessageDialog(this, "Checkmate! The engine wins.");
+                }
+            }
+        });
+    }
+
+    private void printSearchInfo(long elapsed) {
+        long nps = elapsed > 0 ? (AlphaBeta.c * 1000L) / elapsed : 0;
+        System.out.printf("Depth %d | %,d nodes | %,d ms | %,d nps%n",
+                AlphaBeta.globalDepth, AlphaBeta.c, elapsed, nps);
+    }
+
+    private Move findMove(List<Move> moves, int fromRow, int fromCol,
+            int toRow, int toCol) {
         for (Move m : moves) {
             if (m.fromRow() == fromRow && m.fromCol() == fromCol
                     && m.toRow() == toRow && m.toCol() == toCol) {

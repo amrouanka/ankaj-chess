@@ -10,6 +10,8 @@ public class AlphaBeta {
 
     public static int c = 0;
     public static int globalDepth = 4;
+    private static final int INF = 1_000_000;
+    private static final int MAX_QUIESCE_DEPTH = 6;
 
     public static Move findBestMove(Board board) {
         c = 0;
@@ -19,12 +21,13 @@ public class AlphaBeta {
 
         moves = orderMoves(board, moves);
         Move bestMove = null;
-        int bestScore = Integer.MIN_VALUE;
+        int bestScore = -INF;
+        int alpha = -INF;
 
         for (Move move : moves) {
             board.makeMove(move);
             board.flipBoard();
-            int score = -negamax(board, globalDepth - 1, Integer.MIN_VALUE + 1, Integer.MAX_VALUE);
+            int score = -negamax(board, globalDepth - 1, -INF, -alpha);
             board.flipBoard();
             board.undoMove(move);
 
@@ -32,14 +35,20 @@ public class AlphaBeta {
                 bestScore = score;
                 bestMove = move;
             }
+            if (score > alpha)
+                alpha = score;
         }
         return bestMove;
     }
 
     private static int negamax(Board board, int depth, int alpha, int beta) {
         List<Move> moves = MoveGenerator.generatePossibleMoves(board);
-        if (depth == 0 || moves.isEmpty()) {
-            return Evaluation.rating(board, moves.size());
+
+        if (moves.isEmpty()) {
+            return GameLogic.kingSafe(board) ? 0 : -(Evaluation.CHECKMATE + depth);
+        }
+        if (depth == 0) {
+            return quiescence(board, alpha, beta, 0);
         }
 
         for (Move move : moves) {
@@ -58,25 +67,73 @@ public class AlphaBeta {
         return alpha;
     }
 
-    private static List<Move> orderMoves(Board board, List<Move> moves) {
-        record ScoredMove(Move move, int score) {
+    /**
+     * Quiescence search: extends the search for captures and promotions
+     * so the engine doesn't evaluate positions where pieces are hanging.
+     *
+     * @param qDepth how deep into quiescence we've gone (prevents explosions)
+     */
+    private static int quiescence(Board board, int alpha, int beta, int qDepth) {
+        List<Move> moves = MoveGenerator.generatePossibleMoves(board);
+
+        if (moves.isEmpty()) {
+            return GameLogic.kingSafe(board) ? 0 : -Evaluation.CHECKMATE;
         }
-        List<ScoredMove> scored = new ArrayList<>();
+
+        int standPat = Evaluation.rating(board);
+        if (standPat >= beta)
+            return beta;
+        if (standPat > alpha)
+            alpha = standPat;
+
+        // Stop extending if we've gone deep enough
+        if (qDepth >= MAX_QUIESCE_DEPTH)
+            return alpha;
 
         for (Move move : moves) {
-            int score;
-            if (move.isPromotion()) {
-                score = 10000;
-            } else {
-                board.makeMove(move);
-                int bonus = GameLogic.kingSafe(board) ? 0 : 10;
-                score = (Evaluation.rating(board, -1) + bonus) * -1;
-                board.undoMove(move);
-            }
-            scored.add(new ScoredMove(move, score));
-        }
+            if (!move.isCapture() && !move.isPromotion())
+                continue;
 
-        scored.sort((a, b) -> Integer.compare(b.score, a.score));
-        return scored.stream().map(ScoredMove::move).toList();
+            board.makeMove(move);
+            board.flipBoard();
+            int score = -quiescence(board, -beta, -alpha, qDepth + 1);
+            board.flipBoard();
+            board.undoMove(move);
+
+            if (score > alpha)
+                alpha = score;
+            if (alpha >= beta)
+                break;
+        }
+        return alpha;
+    }
+
+    // ─── Move ordering: captures first (MVV-LVA) ──────────────────
+
+    private static List<Move> orderMoves(Board board, List<Move> moves) {
+        List<Move> ordered = new ArrayList<>(moves);
+        ordered.sort((a, b) -> Integer.compare(moveScore(board, b), moveScore(board, a)));
+        return ordered;
+    }
+
+    private static int moveScore(Board board, Move move) {
+        int score = 0;
+        if (move.isPromotion())
+            score += 900;
+        if (move.isCapture()) {
+            score += 10 * pieceValue(move.capturedPiece())
+                    - pieceValue(board.get(move.fromRow(), move.fromCol()));
+        }
+        return score;
+    }
+
+    private static int pieceValue(char piece) {
+        return switch (Character.toUpperCase(piece)) {
+            case 'P' -> 100;
+            case 'N', 'B' -> 325;
+            case 'R' -> 500;
+            case 'Q' -> 975;
+            default -> 0;
+        };
     }
 }
