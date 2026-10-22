@@ -2,18 +2,25 @@
 
 ![Gameplay](docs/screenshot.png)
 
-A chess engine with a graphical interface, written in Java 21. Originally written years ago,
-now refactored with a modern project structure, proper types, and a responsive Swing GUI.
+A chess engine with a graphical interface, written in Java 21. The Java counterpart
+to [AnkaX](https://github.com/amrouanka/ankax-chess) (C#). Originally written years ago,
+now fully refactored with a modern project structure, proper types, and a responsive
+Swing GUI.
 
 ## Features
 
-- **Legal move generation** — all pieces, pawn promotion, check / checkmate / stalemate detection
+- **Complete legal move generation** — all pieces, castling (kingside & queenside),
+  en passant, pawn promotion (auto-queen), check / checkmate / stalemate detection
 - **Negamax search** with alpha-beta pruning at depth 4
-- **Move ordering** — promotions first, then the most promising moves by shallow evaluation
-- **Positional evaluation** — material, mobility, center control, bishop pair bonus,
-  and piece values that shift with pawn count (knights worse, rooks better in endgames)
-- **Responsive Swing GUI** — drag-and-drop moves, dynamic board sizing, engine search
-  runs on a background thread so the interface never freezes
+- **Quiescence search** — extends the search for captures and promotions beyond
+  depth 4 to avoid the horizon effect (leaving pieces hanging)
+- **MVV-LVA move ordering** — captures searched first by Most Valuable Victim /
+  Least Valuable Attacker, improving pruning efficiency
+- **Positional evaluation** — material (P=100, N/B=325, R=500, Q=975),
+  distance-from-center table (DFCT), bishop pair bonus
+- **Responsive Swing GUI** — drag-and-drop moves, dynamic board sizing, play as
+  White or Black, engine search runs on a background thread so the interface
+  never freezes
 
 ## Requirements
 
@@ -25,7 +32,7 @@ now refactored with a modern project structure, proper types, and a responsive S
 Clone and run with Maven:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ankaj-chess.git
+git clone https://github.com/amrouanka/ankaj-chess.git
 cd ankaj-chess
 mvn clean compile exec:java
 ```
@@ -40,38 +47,73 @@ java -jar ankaj-chess.jar
 
 1. Start the game and choose your color in the dialog
 2. Click a piece, then click its destination square
-3. The engine thinks in the background and replies — search speed is printed to the console
+3. The engine thinks in the background and replies — search stats are printed
+   to the console
+4. **Castling:** drag the king two squares toward the rook
+5. **En passant:** capture diagonally behind an enemy pawn that just double-pushed
+6. **Game over:** a dialog announces checkmate or stalemate
+
+## Testing
+
+Run the perft suite to verify move generation correctness:
+
+```bash
+mvn -q exec:java "-Dexec.mainClass=com.amr.chess.engine.Perft"
+```
+
+Expected results (starting position): 20 → 400 → 8,902 → 197,281.
 
 ## Architecture
 
-The engine uses a **flip-board convention**: after every half-move the board is rotated 180°
-and piece colors are swapped, so the side to move is always "white" (uppercase). This means
-move generation and king-safety logic only need to handle one color.
+The engine uses a **flip-board convention**: after every half-move the board is
+flipped vertically (rows swap, columns stay) and piece colors are swapped, so the
+side to move is always "white" (uppercase). This means move generation and
+king-safety logic only need to handle one color.
 
 | File | Responsibility |
 | --- | --- |
-| `model/Board.java` | Board state (`char[8][8]`), make/undo move, flip, copy constructor |
-| `model/Move.java` | Immutable move record (from, to, captured piece, promotion) |
+| `model/Board.java` | Board state (`char[8][8]`), make/undo move, vertical flip, copy constructor, castling rights, en passant |
+| `model/Move.java` | Immutable move record with flags for castling, en passant, and promotion |
 | `engine/MoveGenerator.java` | Generates all legal moves for the side to move |
 | `engine/GameLogic.java` | King safety (attack detection) and move legality via make-check-unmake |
-| `engine/Evaluation.java` | Material + positional scoring from the side to move's perspective |
-| `engine/AlphaBeta.java` | Negamax search with alpha-beta pruning and move ordering |
-| `ui/UserInterface.java` | Swing rendering, input handling, background search thread |
+| `engine/Evaluation.java` | Single-pass material + positional scoring from the side to move's perspective |
+| `engine/AlphaBeta.java` | Negamax search with alpha-beta pruning, quiescence search, and MVV-LVA move ordering |
+| `engine/Perft.java` | Perft testing utility with FEN parser and divide function |
+| `ui/UserInterface.java` | Swing rendering, input handling, game-over detection, background search thread |
 | `Main.java` | Entry point, window setup, color selection |
 
 ### Design notes
 
-- **No global state** — everything is instance-based, so the GUI and the search each work
-  on their own `Board` object (avoids threading issues)
-- **Legality by simulation** — a move is legal if making it leaves the mover's king safe;
-  the move is made, tested, and unmade
+- **No global state** — everything is instance-based, so the GUI and the search
+  each work on their own `Board` clone (avoids threading issues)
+- **Legality by simulation** — a move is legal if making it leaves the mover's
+  king safe; the move is made, tested, and unmade
+- **Fast evaluation** — single pass over 64 squares with no cloning or move
+  generation, keeping the engine responsive even with quiescence search
 - **Display decoupled from data** — the GUI renders from the player's perspective
   regardless of the board's internal flip state
 
 ## Limitations
 
-- No castling or en passant (promotions always to queen)
-- Fixed search depth (4 plies)
+- Promotion always to queen (no underpromotion)
+- Fixed search depth (4 plies + quiescence)
+- No draw by repetition, 50-move rule, or insufficient material detection
 - No transposition table, opening book, or UCI protocol
 
 ```
+
+## What changed from the old README
+
+| Section | Old | New |
+|---|---|---|
+| Features | No castling/en passant mentioned | Added castling, en passant, quiescence |
+| Move ordering | "shallow evaluation" | MVV-LVA (accurate to current code) |
+| Evaluation | "mobility, piece values shift with pawn count" | Removed (both were cut for speed) |
+| Architecture | "rotated 180°" | "flipped vertically" (matches actual `flipBoard`) |
+| Architecture table | 8 files | 9 files (added `Perft.java`) |
+| `Move.java` description | "from, to, captured piece, promotion" | Mentions castling/en passant flags |
+| Limitations | "No castling or en passant" | Removed (they work now) |
+| Testing | Not mentioned | Added perft section |
+| How to Play | 3 steps | 6 steps (castling, en passant, game over) |
+| Repo link | `YOUR_USERNAME` | `amrouanka` |
+| Intro | Generic | Mentions AnkaX relationship |
